@@ -14,7 +14,9 @@ type b2ciefProvider struct {
 }
 
 type providerConfig struct {
-	TenantId types.String `tfsdk:"tenant_id"`
+	TenantId     types.String `tfsdk:"tenant_id"`
+	ClientId     types.String `tfsdk:"client_id"`
+	ClientSecret types.String `tfsdk:"client_secret"`
 }
 
 func New() provider.Provider {
@@ -30,6 +32,12 @@ func (p *b2ciefProvider) Schema(ctx context.Context, req provider.SchemaRequest,
 		"tenant_id": schema.StringAttribute{
 			Required: true,
 		},
+		"client_id": schema.StringAttribute{
+			Required: true,
+		},
+		"client_secret": schema.StringAttribute{
+			Required: true,
+		},
 	}
 }
 
@@ -43,6 +51,8 @@ func (p *b2ciefProvider) Configure(ctx context.Context, req provider.ConfigureRe
 
 	client, err := NewGraphClient(
 		ctx,
+		cfg.TenantId.ValueString(),
+		cfg.ClientId.ValueString(),
 		cfg.TenantId.ValueString(),
 	)
 	if err != nil {

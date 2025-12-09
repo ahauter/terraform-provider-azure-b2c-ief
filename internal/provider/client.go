@@ -16,13 +16,13 @@ import (
 
 type GraphClient struct {
 	tenantId   string
-	credential *azidentity.DefaultAzureCredential
+	credential *azidentity.ClientSecretCredential
 	client     *http.Client
 }
 
-func NewGraphClient(ctx context.Context, tenantId string) (*GraphClient, error) {
+func NewGraphClient(ctx context.Context, tenantId string, clientId string, clientSecret string) (*GraphClient, error) {
 	client := &http.Client{Timeout: 10 * time.Second}
-	credential, err := azidentity.NewDefaultAzureCredential(nil)
+	credential, err := azidentity.NewClientSecretCredential(tenantId, clientId, clientSecret, nil)
 	if err != nil {
 		tflog.Error(context.Background(), "Credential failed", map[string]any{
 			"error": err.Error(),
@@ -40,7 +40,7 @@ func NewGraphClient(ctx context.Context, tenantId string) (*GraphClient, error) 
 func (c *GraphClient) getToken(ctx context.Context) (string, error) {
 	// Get token for Graph
 	token, err := c.credential.GetToken(ctx, policy.TokenRequestOptions{
-		Scopes: []string{"https://graph.microsoft.com/.default", "https://graph.microsoft.com/TrustFrameworkKeySet.ReadWrite.All"},
+		Scopes: []string{"https://graph.microsoft.com/.default"},
 	})
 	if err != nil {
 		return "", err
