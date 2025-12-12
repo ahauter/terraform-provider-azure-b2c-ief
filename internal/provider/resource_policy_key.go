@@ -137,8 +137,6 @@ func (r *PolicyKeyResource) Create(ctx context.Context, req resource.CreateReque
 	}
 	logHTTPResponse(ctx, "Upload secret response", graphResp)
 
-	data.ID = data.Name
-
 	resp.State.Set(ctx, &data)
 	tflog.Debug(ctx, fmt.Sprintf("%s: CREATE complete", logPrefix))
 }
@@ -183,8 +181,9 @@ func (r *PolicyKeyResource) Read(ctx context.Context, req resource.ReadRequest, 
 			body,
 		)
 	}
+	var parsed_resp CreateKeysetResponse
 	raw_body := readBodyBytes(graphResp)
-	err = json.Unmarshal(raw_body, &data)
+	err = json.Unmarshal(raw_body, &parsed_resp)
 	if err != nil {
 		tflog.Error(ctx, fmt.Sprintf("Keyset Parsing error! Error value: %s", err))
 		tflog.Error(ctx, fmt.Sprintf("Raw response: %s", string(raw_body)))
@@ -252,8 +251,8 @@ func (r *PolicyKeyResource) Delete(ctx context.Context, req resource.DeleteReque
 	resp.Diagnostics.Append(diags...)
 
 	tflog.Debug(ctx, fmt.Sprintf("%s: Delete target: %s", logPrefix, jsonDebug(data)))
-
-	deleteURL := fmt.Sprintf("https://graph.microsoft.com/beta/trustFramework/keySets/%s", data.Name.ValueString())
+	n := data.ID.ValueString()
+	deleteURL := fmt.Sprintf("https://graph.microsoft.com/beta/trustFramework/keySets/%s", n)
 
 	tflog.Debug(ctx, fmt.Sprintf("%s: DELETE %s", logPrefix, deleteURL))
 
@@ -266,7 +265,8 @@ func (r *PolicyKeyResource) Delete(ctx context.Context, req resource.DeleteReque
 
 	logHTTPResponse(ctx, "Delete response", graphResp)
 
-	if graphResp.StatusCode != http.StatusOK {
+	// Expected result from success is 204: No Content
+	if graphResp.StatusCode != http.StatusNoContent {
 		body := readBodyString(graphResp)
 		resp.Diagnostics.AddError(
 			fmt.Sprintf("Graph returned %s", graphResp.Status),

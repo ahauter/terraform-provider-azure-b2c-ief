@@ -53,7 +53,7 @@ func (p *b2ciefProvider) Configure(ctx context.Context, req provider.ConfigureRe
 		ctx,
 		cfg.TenantId.ValueString(),
 		cfg.ClientId.ValueString(),
-		cfg.TenantId.ValueString(),
+		cfg.ClientSecret.ValueString(),
 	)
 	if err != nil {
 		resp.Diagnostics.AddError("Unable to create Graph client", err.Error())

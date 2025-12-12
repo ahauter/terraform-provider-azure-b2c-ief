@@ -22,6 +22,7 @@ type GraphClient struct {
 
 func NewGraphClient(ctx context.Context, tenantId string, clientId string, clientSecret string) (*GraphClient, error) {
 	client := &http.Client{Timeout: 10 * time.Second}
+	tflog.Debug(ctx, fmt.Sprintf("Current secret: %s", clientSecret))
 	credential, err := azidentity.NewClientSecretCredential(tenantId, clientId, clientSecret, nil)
 	if err != nil {
 		tflog.Error(context.Background(), "Credential failed", map[string]any{
@@ -29,6 +30,17 @@ func NewGraphClient(ctx context.Context, tenantId string, clientId string, clien
 		})
 		return nil, err
 	}
+	//Check for errors getting token before reporting success
+	_, err = credential.GetToken(ctx, policy.TokenRequestOptions{
+		Scopes: []string{"https://graph.microsoft.com/.default"},
+	})
+	if err != nil {
+		tflog.Error(context.Background(), "Credential failed on token create!", map[string]any{
+			"error": err.Error(),
+		})
+		return nil, err
+	}
+
 	tflog.Debug(ctx, "Success getting default credential!")
 	return &GraphClient{
 		tenantId:   tenantId,
