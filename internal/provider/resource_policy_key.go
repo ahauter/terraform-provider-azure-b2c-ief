@@ -4,13 +4,19 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"strings"
 
+	"github.com/hashicorp/terraform-plugin-framework/path"
+
+	"github.com/hashicorp/terraform-plugin-framework-validators/resourcevalidator"
+	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 )
@@ -28,9 +34,19 @@ type PolicyKeyResource struct {
 }
 
 type PolicyKeyModel struct {
-	ID          types.String `tfsdk:"id"`
-	Name        types.String `tfsdk:"name"`
-	SecretValue types.String `tfsdk:"secret_value"`
+	ID       types.String       `tfsdk:"id"`
+	Name     types.String       `tfsdk:"name"`
+	Usage    types.String       `tfsdk:"usage"`
+	Upload   *PolicyKeyUpload   `tfsdk:"upload"`
+	Generate *PolicyKeyGenerate `tfsdk:"generate"`
+}
+
+type PolicyKeyUpload struct {
+	Value types.String `tfsdk:"value"`
+}
+
+type PolicyKeyGenerate struct {
+	Type types.String `tfsdk:"type"`
 }
 
 func NewPolicyKeyResource() resource.Resource {
@@ -41,18 +57,71 @@ func (r *PolicyKeyResource) Metadata(_ context.Context, req resource.MetadataReq
 	resp.TypeName = req.ProviderTypeName + "_policy_key"
 }
 
-func (r *PolicyKeyResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
-	resp.Schema.Attributes = map[string]schema.Attribute{
-		"id": schema.StringAttribute{
-			Computed: true,
+func (r *PolicyKeyResource) Schema(
+	ctx context.Context,
+	req resource.SchemaRequest,
+	resp *resource.SchemaResponse,
+) {
+	resp.Schema = schema.Schema{
+		Description: "Manages an Azure AD B2C IEF policy key container.",
+
+		Attributes: map[string]schema.Attribute{
+			"id": schema.StringAttribute{
+				Computed:    true,
+				Description: "The object ID of the key container in Microsoft Graph. Use this to reference the policy key in a policy.",
+			},
+
+			"name": schema.StringAttribute{
+				Required:    true,
+				Description: "The IEF policy key container name. The B2C_1A_ prefix is not added! This will cause errors if the name is used in a policy",
+			},
+
+			"usage": schema.StringAttribute{
+				Required:    true,
+				Description: "Key usage: sig (signing) or enc (encryption).",
+				Validators: []validator.String{
+					stringvalidator.OneOf("sig", "enc"),
+				},
+			},
 		},
-		"name": schema.StringAttribute{
-			Required: true,
+
+		Blocks: map[string]schema.Block{
+			"generate": schema.SingleNestedBlock{
+				Description: "Generate a new key in the key container.",
+				Attributes: map[string]schema.Attribute{
+					"type": schema.StringAttribute{
+						Optional:    true,
+						Description: "Key type. Only RSA is currently supported by Azure AD B2C.",
+						Validators: []validator.String{
+							stringvalidator.OneOf("RSA"),
+						},
+					},
+				},
+			},
+
+			"upload": schema.SingleNestedBlock{
+				Description: "Upload an existing key or secret.",
+				Attributes: map[string]schema.Attribute{
+					"value": schema.StringAttribute{
+						Optional:    true,
+						Sensitive:   true,
+						Description: "Raw secret value",
+					},
+				},
+			},
 		},
-		"secret_value": schema.StringAttribute{
-			Required:  true,
-			Sensitive: true,
-		},
+	}
+}
+
+// ConfigValidators enforces exactly one of generate or upload
+func (r *PolicyKeyResource) ConfigValidators(
+	ctx context.Context,
+) []resource.ConfigValidator {
+	return []resource.ConfigValidator{
+		resourcevalidator.ExactlyOneOf(
+			path.MatchRoot("generate"),
+			path.MatchRoot("upload"),
+		),
 	}
 }
 
@@ -65,6 +134,47 @@ func (r *PolicyKeyResource) Configure(_ context.Context, req resource.ConfigureR
 
 type CreateKeysetResponse struct {
 	Id string `json:"id"`
+}
+
+func (r *PolicyKeyResource) uploadOrGenerate(ctx context.Context, data PolicyKeyModel) error {
+	var uploadBody map[string]any
+	var endpoint string
+
+	if data.Generate != nil {
+		uploadBody = map[string]any{
+			"use": data.Usage.ValueString(),
+			"kty": data.Generate.Type.ValueString(), //THIS could be hard-code "RSA" lol
+		}
+		endpoint = fmt.Sprintf(
+			"https://graph.microsoft.com/beta/trustFramework/keySets/%s/generateKey",
+			data.ID.ValueString(),
+		)
+	} else if data.Upload != nil && !isNullOrEmpty(data.Upload.Value) {
+		uploadBody = map[string]any{
+			"use": data.Usage.ValueString(),
+			"k":   data.Upload.Value.ValueString(),
+		}
+		endpoint = fmt.Sprintf(
+			"https://graph.microsoft.com/beta/trustFramework/keySets/%s/uploadSecret",
+			data.ID.ValueString(),
+		)
+	} else {
+		// Neither block specified — should not happen if schema validators are working
+		return errors.New("No provisioning method specified OR an invalid block was given")
+	}
+
+	tflog.Debug(ctx, fmt.Sprintf("%s: POST %s\nBody:\n%s", logPrefix, endpoint, jsonDebug(uploadBody)))
+
+	graphResp, err := r.client.doGraph(ctx, "POST", endpoint, uploadBody)
+	if err != nil {
+		tflog.Error(ctx, fmt.Sprintf("%s: Upload secret error: %s", logPrefix, err))
+		return err
+	} else if graphResp.StatusCode != http.StatusOK {
+		tflog.Error(ctx, fmt.Sprintf("Error in create secret response!\n%s", readBodyString(graphResp)))
+		return errors.New(readBodyString(graphResp))
+	}
+	logHTTPResponse(ctx, "Upload secret response", graphResp)
+	return nil
 }
 
 // ────────────────────────────────────────────────────────────────────────────────
@@ -84,7 +194,7 @@ func (r *PolicyKeyResource) Create(ctx context.Context, req resource.CreateReque
 	// 1. Create keyset
 	createBody := map[string]any{
 		"id":    data.Name.ValueString(),
-		"usage": "sig",
+		"usage": data.Usage.ValueString(),
 		"keys":  []any{},
 	}
 
@@ -114,28 +224,16 @@ func (r *PolicyKeyResource) Create(ctx context.Context, req resource.CreateReque
 	}
 	data.ID = types.StringValue(keysetResp.Id)
 
-	// 2. Upload secret
-	uploadBody := map[string]any{
-		"use": "sig",
-		"k":   data.SecretValue.ValueString(),
-	}
-	uploadURL := fmt.Sprintf(
-		"https://graph.microsoft.com/beta/trustFramework/keySets/%s/uploadSecret",
-		data.ID.ValueString(),
-	)
-
-	tflog.Debug(ctx, fmt.Sprintf("%s: POST %s\nBody:\n%s", logPrefix, uploadURL, jsonDebug(uploadBody)))
-
-	graphResp, err = r.client.doGraph(ctx, "POST", uploadURL, uploadBody)
+	//TODO Create upload methods for x.509 and PKCS
+	//TODO Not-good-before and expiry for keys :)
+	// 2. Upload secret /generate secret !
+	err = r.uploadOrGenerate(ctx, data)
 	if err != nil {
-		tflog.Error(ctx, fmt.Sprintf("%s: Upload secret error: %s", logPrefix, err))
-		resp.Diagnostics.AddError("Upload secret failed", err.Error())
-		return
-	} else if graphResp.StatusCode != http.StatusOK {
-		tflog.Error(ctx, fmt.Sprintf("Error in create secret response!\n%s", readBodyString(graphResp)))
-		resp.Diagnostics.AddError("Create keyset failed", readBodyString(graphResp))
+		resp.Diagnostics.AddError(
+			"Error creating or uploading policy key",
+			err.Error(),
+		)
 	}
-	logHTTPResponse(ctx, "Upload secret response", graphResp)
 
 	resp.State.Set(ctx, &data)
 	tflog.Debug(ctx, fmt.Sprintf("%s: CREATE complete", logPrefix))
@@ -194,7 +292,7 @@ func (r *PolicyKeyResource) Read(ctx context.Context, req resource.ReadRequest, 
 		return
 	}
 	resp.State.Set(ctx, &data)
-	tflog.Debug(ctx, fmt.Sprintf("READ complete", logPrefix))
+	tflog.Debug(ctx, "READ complete")
 }
 
 // ────────────────────────────────────────────────────────────────────────────────
@@ -211,29 +309,13 @@ func (r *PolicyKeyResource) Update(ctx context.Context, req resource.UpdateReque
 
 	tflog.Debug(ctx, fmt.Sprintf("%s: Update plan: %s", logPrefix, jsonDebug(data)))
 
-	uploadBody := map[string]any{
-		"value": data.SecretValue.ValueString(),
-	}
-	uploadURL := fmt.Sprintf("https://graph.microsoft.com/beta/trustFramework/keySets/%s/uploadSecret", data.Name.ValueString())
-
-	tflog.Debug(ctx, fmt.Sprintf("%s: POST %s\nBody:\n%s", logPrefix, uploadURL, jsonDebug(uploadBody)))
-
-	graphResp, err := r.client.doGraph(ctx, "POST", uploadURL, uploadBody)
+	err := r.uploadOrGenerate(ctx, data)
 	if err != nil {
-		tflog.Error(ctx, fmt.Sprintf("%s: Update error: %s", logPrefix, err))
-		resp.Diagnostics.AddError("Upload secret failed", err.Error())
-		return
-	}
-	logHTTPResponse(ctx, "Update uploadSecret response", graphResp)
-
-	if graphResp.StatusCode != http.StatusOK {
-		body := readBodyString(graphResp)
 		resp.Diagnostics.AddError(
-			fmt.Sprintf("Graph returned %s", graphResp.Status),
-			body,
+			"Error updating or uploading policy key",
+			err.Error(),
 		)
 	}
-
 	resp.State.Set(ctx, &data)
 	tflog.Debug(ctx, fmt.Sprintf("%s: UPDATE complete", logPrefix))
 }

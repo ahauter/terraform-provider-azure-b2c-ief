@@ -136,21 +136,12 @@ func (c *GraphClient) doGraphXML(
 	body *string,
 ) (*http.Response, error) {
 	var buf *bytes.Buffer
-	var payload string
 
 	if body != nil {
 		buf = bytes.NewBufferString(*body)
-		payload = *body
 	} else {
 		buf = &bytes.Buffer{}
-		payload = "<empty>"
 	}
-
-	tflog.Debug(ctx, "sending Graph request", map[string]any{
-		"method":  method,
-		"url":     url,
-		"payload": payload,
-	})
 
 	req, err := http.NewRequest(method, url, buf)
 	if err != nil {
