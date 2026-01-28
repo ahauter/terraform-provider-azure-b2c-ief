@@ -1,2 +1,19 @@
 tf.log
 terraform-provider-azure-b2c-ief
+
+# Test artifacts
+.terraform/
+*.tfstate
+*.tfplan
+*.log
+crash.log
+
+# Environment variables with secrets
+testing.env
+.env
+.envrc
+*.env
+
+# OS files
+.DS_Store
+Thumbs.db
