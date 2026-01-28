@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<TrustFrameworkPolicy 
+  PolicyId="B2C_1A_IntegrationTest" 
+  TenantObjectId="{settings:TENANT_ID}" 
+  PublicPolicyUri="http://integration-test.b2clogin.com/B2C_1A_IntegrationTest" 
+  DeploymentMode="Development" 
+  UserJourneyBehaviors="0" 
+  xmlns="http://schemas.microsoft.com/online/cpim/schemas/2013/06">
+
+  <BasePolicy>
+    <RelyingParty>
+      <Partner EntityTypes="0" PartnerUrl="https://login.microsoftonline.com/integration-test.b2clogin.com" MetadataUrl="https://login.microsoftonline.com/integration-test.b2clogin.com">
+        <Client>
+          <ClientId>{settings:CLIENT_ID}</ClientId>
+          <ClientSecret>PlaceholderSecret</ClientSecret>
+          <RedirectUris>https://jwt.ms/</RedirectUris>
+          <LogoutUrl>https://jwt.ms/</LogoutUrl>
+          <Scopes>openid</Scopes>
+          <ServicePrincipalIdentity>true</ServicePrincipalIdentity>
+        </Client>
+      </Partner>
+    </RelyingParty>
+
+    <TechnicalProfile>
+      <DisplayName>{settings:APP_NAME}</DisplayName>
+      <Description>Integration test profile using {settings:SIGNING_KEY}</Description>
+      <Metadata>
+        <Item Key="SigningKey" Type="string" Usage="Required">{settings:SIGNING_KEY}</Item>
+        <Item Key="IsEnabled" Type="boolean" Usage="Optional" />
+        <Item Key="Version" Type="string" Usage="Optional" />
+        <Item Key="EncryptionKey" Type="string" Usage="Optional">{settings:ENCRYPTION_KEY}</Item>
+      </Metadata>
+    </TechnicalProfile>
+
+    <UserJourney>
+      <OrchestrationSteps>
+        <OrchestrationStep Type="DisplayControl" Name="UnverifiedEmail" />
+        <OrchestrationStep Type="CollectClaims" Name="EmailVerification" />
+        <OrchestrationStep Type="SendClaims" Name="ApiIntegration" />
+      </OrchestrationSteps>
+    </UserJourney>
+
+    <ClaimsSchema>
+      <ClaimType Id="integration_extension">
+        <InputClaim ClaimReferenceId="integration_test_given_name" />
+        <InputClaim ClaimReferenceId="integration_test_sur_name" />
+        <InputClaim ClaimReferenceId="integration_test_email" />
+      </ClaimType>
+    </ClaimsSchema>
+
+    <RelyingParty>
+      <Default>
+        <JWT Issuers="https://sts.windows.net/{settings:TENANT_ID}/v2.0/" />
+        <JWKS Url="https://login.microsoftonline.com/common/discovery/v2.0/keys" />
+      </Default>
+    </RelyingParty>
+
+  </BasePolicy>
+
+</TrustFrameworkPolicy>

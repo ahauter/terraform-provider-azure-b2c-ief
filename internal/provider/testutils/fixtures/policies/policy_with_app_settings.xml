@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<TrustFrameworkPolicy 
+  PolicyId="B2C_1A_TestAppSettings" 
+  TenantObjectId="{settings:TENANT_ID}" 
+  PublicPolicyUri="http://test-tenant.b2clogin.com/B2C_1A_TestAppSettings" 
+  DeploymentMode="Development" 
+  UserJourneyBehaviors="0" 
+  xmlns="http://schemas.microsoft.com/online/cpim/schemas/2013/06">
+
+  <BasePolicy>
+    <RelyingParty>
+      <Partner EntityTypes="0" PartnerUrl="https://login.microsoftonline.com/test-tenant.b2clogin.com" MetadataUrl="https://login.microsoftonline.com/test-tenant.b2clogin.com">
+        <Client>
+          <ClientId>{settings:CLIENT_ID}</ClientId>
+          <ClientSecret>{settings:CLIENT_SECRET}</ClientSecret>
+          <RedirectUris>{settings:REDIRECT_URI}</RedirectUris>
+          <LogoutUrl>{settings:LOGOUT_URI}</LogoutUrl>
+          <Scopes>{settings:SCOPES}</Scopes>
+          <ServicePrincipalIdentity>true</ServicePrincipalIdentity>
+        </Client>
+      </Partner>
+    </RelyingParty>
+
+    <TechnicalProfile>
+      <DisplayName>{settings:APP_NAME}</DisplayName>
+      <Description>{settings:APP_DESCRIPTION}</Description>
+      <Metadata>
+        <Item Key="{settings:CUSTOM_KEY}" Type="string" Usage="Required" />
+        <Item Key="IsEnabled" Type="boolean" Usage="Optional" />
+        <Item Key="Version" Type="string" Usage="Optional" />
+        <Item Key="ApiKey" Type="string" Usage="Required" />
+        <Item Key="Endpoint" Type="string" Usage="Optional">{settings:API_ENDPOINT}</Item>
+      </Metadata>
+    </TechnicalProfile>
+
+    <UserJourney>
+      <OrchestrationSteps>
+        <OrchestrationStep Type="DisplayControl" Name="{settings:DISPLAY_CONTROL}" />
+        <OrchestrationStep Type="CollectClaims" Name="EmailVerification" />
+        <OrchestrationStep Type="SendClaims" Name="ApiIntegration" />
+      </OrchestrationSteps>
+    </UserJourney>
+
+    <ClaimsSchema>
+      <ClaimType Id="test_extension">
+        <InputClaim ClaimReferenceId="extension_test_given_name" />
+        <InputClaim ClaimReferenceId="extension_test_sur_name" />
+        <InputClaim ClaimReferenceId="extension_test_email" />
+      </ClaimType>
+    </ClaimsSchema>
+
+  </BasePolicy>
+
+</TrustFrameworkPolicy>

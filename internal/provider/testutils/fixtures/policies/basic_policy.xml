@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<TrustFrameworkPolicy 
+  PolicyId="B2C_1A_TestBasic" 
+  TenantObjectId="{settings:TENANT_ID}" 
+  PublicPolicyUri="http://test-tenant.b2clogin.com/B2C_1A_TestBasic" 
+  DeploymentMode="Development" 
+  UserJourneyBehaviors="0" 
+  xmlns="http://schemas.microsoft.com/online/cpim/schemas/2013/06">
+
+  <BasePolicy>
+    <RelyingParty>
+      <Partner EntityTypes="0" PartnerUrl="https://login.microsoftonline.com/test-tenant.b2clogin.com" MetadataUrl="https://login.microsoftonline.com/test-tenant.b2clogin.com">
+        <Client>
+          <ClientId>{settings:CLIENT_ID}</ClientId>
+          <ClientSecret>PlaceholderSecret</ClientSecret>
+          <RedirectUris>https://jwt.ms/</RedirectUris>
+          <LogoutUrl>https://jwt.ms/</LogoutUrl>
+          <Scopes>openid</Scopes>
+          <ServicePrincipalIdentity>true</ServicePrincipalIdentity>
+        </Client>
+      </Partner>
+    </RelyingParty>
+
+    <TechnicalProfile>
+      <DisplayName>{settings:APP_NAME}</DisplayName>
+      <Description>Basic test profile</Description>
+      <Metadata>
+        <Item Key="IsEnabled" Type="boolean" Usage="Optional" />
+        <Item Key="Version" Type="string" Usage="Optional" />
+        <Item Key="ApiKey" Type="string" Usage="Required" />
+      </Metadata>
+    </TechnicalProfile>
+
+    <UserJourney>
+      <OrchestrationSteps>
+        <OrchestrationStep Type="DisplayControl" Name="UnverifiedEmail" />
+        <OrchestrationStep Type="CollectClaims" Name="EmailVerification" />
+      </OrchestrationSteps>
+    </UserJourney>
+
+  </BasePolicy>
+
+</TrustFrameworkPolicy>

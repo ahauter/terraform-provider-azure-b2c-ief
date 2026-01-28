@@ -10,10 +10,9 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/hashicorp/terraform-plugin-framework/path"
-
 	"github.com/hashicorp/terraform-plugin-framework-validators/resourcevalidator"
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
+	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
@@ -42,11 +41,43 @@ type PolicyKeyModel struct {
 }
 
 type PolicyKeyUpload struct {
-	Value types.String `tfsdk:"value"`
+	Value        types.String `tfsdk:"value"`
+	ValueVersion types.Int64  `tfsdk:"value_version"`
 }
 
 type PolicyKeyGenerate struct {
 	Type types.String `tfsdk:"type"`
+}
+
+// sanitizeWriteOnlyFields ensures write-only attributes are null before state is set
+func sanitizeWriteOnlyFields(data *PolicyKeyModel) {
+	if data.Upload != nil {
+		// Detect legacy state with non-null write-only value
+		hadSecret := !data.Upload.Value.IsNull()
+		if hadSecret {
+			tflog.Warn(context.Background(), "🔒 CLEANING DETECTED SECRET: upload.value was found in state and has been sanitized")
+		}
+
+		data.Upload = &PolicyKeyUpload{
+			ValueVersion: data.Upload.ValueVersion,
+			Value:        types.StringNull(), // Force null for write-only field
+		}
+	}
+}
+
+// sanitizeLegacyState detects and cleans existing secrets from state files
+func sanitizeLegacyState(ctx context.Context, data *PolicyKeyModel) {
+	if data.Upload != nil && !data.Upload.Value.IsNull() {
+		// Log security event for user awareness
+		tflog.Warn(ctx, "🔒 LEGACY STATE CLEANUP: Removing write-only value from state. Previous provider version stored secrets in state - this has been fixed for security.")
+		tflog.Debug(ctx, "Legacy secret detected and sanitized", map[string]any{
+			"key_name": data.Name.ValueString(),
+			"key_id":   data.ID.ValueString(),
+		})
+
+		// Sanitize the legacy secret
+		data.Upload.Value = types.StringNull()
+	}
 }
 
 func NewPolicyKeyResource() resource.Resource {
@@ -103,9 +134,13 @@ func (r *PolicyKeyResource) Schema(
 				Description: "Upload an existing key or secret.",
 				Attributes: map[string]schema.Attribute{
 					"value": schema.StringAttribute{
+						WriteOnly:   true,
 						Optional:    true,
-						Sensitive:   true,
-						Description: "Raw secret value",
+						Description: "Raw secret value (write-only, never stored in state)",
+					},
+					"value_version": schema.Int64Attribute{
+						Optional:    true,
+						Description: "Version tracker. Omit to always upload, 0+ to manage versions, -1 to force upload.",
 					},
 				},
 			},
@@ -136,7 +171,7 @@ type CreateKeysetResponse struct {
 	Id string `json:"id"`
 }
 
-func (r *PolicyKeyResource) uploadOrGenerate(ctx context.Context, data PolicyKeyModel) error {
+func (r *PolicyKeyResource) uploadOrGenerate(ctx context.Context, data PolicyKeyModel, configData PolicyKeyModel, stateData PolicyKeyModel) error {
 	var uploadBody map[string]any
 	var endpoint string
 
@@ -149,15 +184,45 @@ func (r *PolicyKeyResource) uploadOrGenerate(ctx context.Context, data PolicyKey
 			"https://graph.microsoft.com/beta/trustFramework/keySets/%s/generateKey",
 			data.ID.ValueString(),
 		)
-	} else if data.Upload != nil && !isNullOrEmpty(data.Upload.Value) {
-		uploadBody = map[string]any{
-			"use": data.Usage.ValueString(),
-			"k":   data.Upload.Value.ValueString(),
+	} else if data.Upload != nil {
+		// Validate config is non-negative (defensive check)
+		if !configData.Upload.ValueVersion.IsNull() {
+			version := configData.Upload.ValueVersion.ValueInt64()
+			if version < 0 && version != -1 {
+				return errors.New("value_version must be -1 or >= 0")
+			}
 		}
-		endpoint = fmt.Sprintf(
-			"https://graph.microsoft.com/beta/trustFramework/keySets/%s/uploadSecret",
-			data.ID.ValueString(),
-		)
+
+		// Check if we should upload based on version
+		shouldUpload := configData.Upload.Value.IsNull() || // Null = always upload
+			configData.Upload.ValueVersion.ValueInt64() == -1 || // Explicit -1 = upload
+			(configData.Upload.ValueVersion.ValueInt64() >= 0 && // Non-negative check + version change
+				configData.Upload.ValueVersion.ValueInt64() != stateData.Upload.ValueVersion.ValueInt64())
+
+		if shouldUpload {
+			if configData.Upload.Value.IsNull() {
+				return errors.New("upload.value cannot be null when upload block is specified")
+			}
+
+			// Add debug log for null version
+			if configData.Upload.ValueVersion.IsNull() {
+				tflog.Debug(ctx, "value_version is null, triggering upload (assuming fresh secret each run)")
+			} else {
+				tflog.Debug(ctx, fmt.Sprintf("value_version: %d", configData.Upload.ValueVersion.ValueInt64()))
+			}
+
+			uploadBody = map[string]any{
+				"use": data.Usage.ValueString(),
+				"k":   configData.Upload.Value.ValueString(), // Use config value for write-only access
+			}
+			endpoint = fmt.Sprintf(
+				"https://graph.microsoft.com/beta/trustFramework/keySets/%s/uploadSecret",
+				data.ID.ValueString(),
+			)
+		} else {
+			// No upload needed, return early
+			return nil
+		}
 	} else {
 		// Neither block specified — should not happen if schema validators are working
 		return errors.New("No provisioning method specified OR an invalid block was given")
@@ -227,13 +292,16 @@ func (r *PolicyKeyResource) Create(ctx context.Context, req resource.CreateReque
 	//TODO Create upload methods for x.509 and PKCS
 	//TODO Not-good-before and expiry for keys :)
 	// 2. Upload secret /generate secret !
-	err = r.uploadOrGenerate(ctx, data)
+	err = r.uploadOrGenerate(ctx, data, data, PolicyKeyModel{}) // Use data as both config and plan
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Error creating or uploading policy key",
 			err.Error(),
 		)
 	}
+
+	// Sanitize write-only fields before storing in state
+	sanitizeWriteOnlyFields(&data)
 
 	resp.State.Set(ctx, &data)
 	tflog.Debug(ctx, fmt.Sprintf("%s: CREATE complete", logPrefix))
@@ -251,7 +319,10 @@ func (r *PolicyKeyResource) Read(ctx context.Context, req resource.ReadRequest, 
 	diags := req.State.Get(ctx, &data)
 	resp.Diagnostics.Append(diags...)
 
-	tflog.Debug(ctx, fmt.Sprintf("%s: State before read: %s", logPrefix, jsonDebug(data)))
+	// CRITICAL: Always sanitize legacy state for backwards compatibility
+	sanitizeLegacyState(ctx, &data)
+
+	tflog.Debug(ctx, fmt.Sprintf("%s: State after legacy cleanup: %s", logPrefix, jsonDebug(data)))
 
 	n := data.ID.ValueString()
 	getURL := fmt.Sprintf("https://graph.microsoft.com/beta/trustFramework/keySets/%s", n)
@@ -291,6 +362,22 @@ func (r *PolicyKeyResource) Read(ctx context.Context, req resource.ReadRequest, 
 		)
 		return
 	}
+
+	// Get current state to preserve write-only field structure and version tracking
+	var currentState PolicyKeyModel
+	req.State.Get(ctx, &currentState)
+
+	// Preserve version tracking from state
+	if currentState.Upload != nil && data.Upload == nil {
+		data.Upload = &PolicyKeyUpload{
+			ValueVersion: currentState.Upload.ValueVersion,
+			Value:        types.StringNull(), // Keep write-only field null
+		}
+	}
+
+	// Ensure write-only fields are sanitized before storing in state
+	sanitizeWriteOnlyFields(&data)
+
 	resp.State.Set(ctx, &data)
 	tflog.Debug(ctx, "READ complete")
 }
@@ -303,19 +390,59 @@ func (r *PolicyKeyResource) Read(ctx context.Context, req resource.ReadRequest, 
 func (r *PolicyKeyResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
 	tflog.Debug(ctx, fmt.Sprintf("%s: UPDATE begin", logPrefix))
 
-	var data PolicyKeyModel
-	diags := req.Plan.Get(ctx, &data)
-	resp.Diagnostics.Append(diags...)
+	// Get both config and state data for version comparison
+	var configData, stateData PolicyKeyModel
+	configDiags := req.Plan.Get(ctx, &configData)
+	stateDiags := req.State.Get(ctx, &stateData)
+	resp.Diagnostics.Append(configDiags...)
+	resp.Diagnostics.Append(stateDiags...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
 
-	tflog.Debug(ctx, fmt.Sprintf("%s: Update plan: %s", logPrefix, jsonDebug(data)))
+	// CRITICAL: Always sanitize legacy state for backwards compatibility
+	sanitizeLegacyState(ctx, &stateData)
 
-	err := r.uploadOrGenerate(ctx, data)
+	tflog.Debug(ctx, fmt.Sprintf("%s: Update plan: %s", logPrefix, jsonDebug(configData)))
+
+	err := r.uploadOrGenerate(ctx, configData, configData, stateData)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Error updating or uploading policy key",
 			err.Error(),
 		)
+		return
 	}
+
+	// Rebuild state data from sanitized sources - don't use plan data directly
+	data := PolicyKeyModel{
+		ID:    configData.ID,
+		Name:  configData.Name,
+		Usage: configData.Usage,
+	}
+
+	// Handle generate block if present
+	if configData.Generate != nil {
+		data.Generate = configData.Generate
+	}
+
+	// Handle upload block with proper version tracking
+	if configData.Upload != nil {
+		data.Upload = &PolicyKeyUpload{
+			ValueVersion: configData.Upload.ValueVersion,
+			Value:        types.StringNull(), // Explicitly null for write-only field
+		}
+	} else if stateData.Upload != nil {
+		// Preserve existing upload structure if no upload in config
+		data.Upload = &PolicyKeyUpload{
+			ValueVersion: stateData.Upload.ValueVersion,
+			Value:        types.StringNull(), // Explicitly null for write-only field
+		}
+	}
+
+	// Ensure write-only fields are sanitized before storing in state
+	sanitizeWriteOnlyFields(&data)
+
 	resp.State.Set(ctx, &data)
 	tflog.Debug(ctx, fmt.Sprintf("%s: UPDATE complete", logPrefix))
 }
@@ -331,6 +458,9 @@ func (r *PolicyKeyResource) Delete(ctx context.Context, req resource.DeleteReque
 	var data PolicyKeyModel
 	diags := req.State.Get(ctx, &data)
 	resp.Diagnostics.Append(diags...)
+
+	// Sanitize legacy state for consistency
+	sanitizeLegacyState(ctx, &data)
 
 	tflog.Debug(ctx, fmt.Sprintf("%s: Delete target: %s", logPrefix, jsonDebug(data)))
 	n := data.ID.ValueString()

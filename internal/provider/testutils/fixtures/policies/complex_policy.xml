@@ -1,0 +1,83 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<TrustFrameworkPolicy 
+  PolicyId="B2C_1A_ComplexTest" 
+  TenantObjectId="{settings:TENANT_ID}" 
+  PublicPolicyUri="http://test-tenant.b2clogin.com/B2C_1A_ComplexTest" 
+  DeploymentMode="Development" 
+  UserJourneyBehaviors="0" 
+  xmlns="http://schemas.microsoft.com/online/cpim/schemas/2013/06">
+
+  <BasePolicy>
+    <RelyingParty>
+      <Partner EntityTypes="0" PartnerUrl="https://login.microsoftonline.com/test-tenant.b2clogin.com" MetadataUrl="https://login.microsoftonline.com/test-tenant.b2clogin.com">
+        <Client>
+          <ClientId>{settings:CLIENT_ID}</ClientId>
+          <ClientSecret>{settings:CLIENT_SECRET}</ClientSecret>
+          <RedirectUris>https://jwt.ms/</RedirectUris>
+          <LogoutUrl>https://jwt.ms/</LogoutUrl>
+          <Scopes>openid profile email</Scopes>
+          <ServicePrincipalIdentity>true</ServicePrincipalIdentity>
+        </Client>
+      </Partner>
+    </RelyingParty>
+
+    <TechnicalProfile>
+      <DisplayName>{settings:APP_NAME}</DisplayName>
+      <Description>{settings:APP_DESCRIPTION}</Description>
+      <Metadata>
+        <Item Key="{settings:CUSTOM_KEY}" Type="string" Usage="Required" />
+        <Item Key="IsEnabled" Type="boolean" Usage="Optional" />
+        <Item Key="Version" Type="string" Usage="Optional" />
+        <Item Key="ApiKey" Type="string" Usage="Required" />
+        <Item Key="Endpoint" Type="string" Usage="Optional">{settings:API_ENDPOINT}</Item>
+        <Item Key="Timeout" Type="int" Usage="Optional">{settings:API_TIMEOUT}</Item>
+        <Item Key="RetryCount" Type="int" Usage="Optional">{settings:RETRY_COUNT}</Item>
+      </Metadata>
+    </TechnicalProfile>
+
+    <UserJourney>
+      <OrchestrationSteps>
+        <OrchestrationStep Type="DisplayControl" Name="UnverifiedEmail" />
+        <OrchestrationStep Type="CollectClaims" Name="EmailVerification" />
+        <OrchestrationStep Type="CollectClaims" Name="ProfileUpdate" />
+        <OrchestrationStep Type="DisplayControl" Name="SelfAssertedEmail" />
+        <OrchestrationStep Type="DisplayControl" Name="UserVerification" />
+        <OrchestrationStep Type="SendClaims" Name="AttributeStore" />
+      </OrchestrationSteps>
+    </UserJourney>
+
+    <ClaimsSchema>
+      <ClaimType Id="extension_test_attributes">
+        <InputClaim ClaimReferenceId="extension_test_given_name" />
+        <InputClaim ClaimReferenceId="extension_test_sur_name" />
+        <InputClaim ClaimReferenceId="extension_test_email" />
+        <InputClaim ClaimReferenceId="extension_test_phone" />
+      </ClaimType>
+    </ClaimsSchema>
+
+    <UserJourney>
+      <OrchestrationSteps>
+        <OrchestrationStep Type="DisplayClaim" Name="PasswordReset" />
+        <OrchestrationStep Type="EditClaim" Name="UserChangeEmail" />
+        <OrchestrationStep Type="SetClaim" Name="UserChangeEmail" />
+      </OrchestrationSteps>
+      <ClaimsSchema>
+        <ClaimType Id="extension_test_user_attributes">
+          <InputClaim ClaimReferenceId="extension_test_given_name" />
+          <InputClaim ClaimReferenceId="extension_test_sur_name" />
+          <InputClaim ClaimReferenceId="extension_test_email" />
+          <InputClaim ClaimReferenceId="extension_test_phone" />
+        </ClaimType>
+      </ClaimsSchema>
+    </UserJourney>
+
+    <RelyingParty>
+      <Default>
+        <JWT Issuers="https://sts.windows.net/{settings:TENANT_ID}/v2.0/" />
+        <JWKS Url="https://login.microsoftonline.com/common/discovery/v2.0/keys" />
+      </Default>
+    </RelyingParty>
+
+  </BasePolicy>
+
+</TrustFrameworkPolicy>

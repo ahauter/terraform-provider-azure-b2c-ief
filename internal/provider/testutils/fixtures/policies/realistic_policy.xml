@@ -1,0 +1,89 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<TrustFrameworkPolicy 
+  PolicyId="B2C_1A_SignUpOrSignIn" 
+  TenantObjectId="your-tenant-id-placeholder" 
+  PublicPolicyUri="http://your-tenant-id.b2clogin.com/B2C_1A_SignUpOrSignIn" 
+  DeploymentMode="Development" 
+  UserJourneyBehaviors="0" 
+  xmlns="http://schemas.microsoft.com/online/cpim/schemas/2013/06">
+
+  <BasePolicy>
+    <RelyingParty>
+      <Partner EntityTypes="0" PartnerUrl="https://login.microsoftonline.com/your-tenant-id.b2clogin.com" MetadataUrl="https://login.microsoftonline.com/your-tenant-id.b2clogin.com">
+        <Client>
+          <ClientId>{settings:CLIENT_ID}</ClientId>
+        <ClientSecret>PlaceholderSecret</ClientSecret>
+          <RedirectUris>https://jwt.ms/</RedirectUris>
+          <LogoutUrl>https://jwt.ms/</LogoutUrl>
+          <Scopes>openid</Scopes>
+          <ServicePrincipalIdentity>true</ServicePrincipalIdentity>
+        </Client>
+      </Partner>
+    </RelyingParty>
+
+    <TechnicalProfile>
+      <DisplayName>{settings:APP_NAME}</DisplayName>
+      <Description>{settings:APP_DESCRIPTION}</Description>
+      <Metadata>
+        <Item Key="{settings:METADATA_KEY}" Type="string" Usage="Required" />
+        <Item Key="IsEnabled" Type="boolean" Usage="Optional" />
+        <Item Key="Version" Type="string" Usage="Optional" />
+        <Item Key="ApiKey" Type="string" Usage="Required" />
+      </Metadata>
+    </TechnicalProfile>
+
+    <UserJourney>
+      <OrchestrationSteps>
+        <OrchestrationStep Type="DisplayControl" Name="UnverifiedEmail" />
+        <OrchestrationStep Type="CollectClaims" Name="EmailVerification" />
+        <OrchestrationStep Type="CollectClaims" Name="ProfileUpdate" />
+        <OrchestrationStep Type="DisplayControl" Name="SelfAssertedEmail" />
+        <OrchestrationStep Type="DisplayControl" Name="UserVerification" />
+        <OrchestrationStep Type="SendClaims" Name="AttributeStore" />
+      </OrchestrationSteps>
+      </UserJourney>
+
+      <ClaimsSchema>
+        <ClaimType Id="extension_b2c7f6a4da2014_06_22_guids">
+          <InputClaim ClaimReferenceId="extension_b2c7f6a4da2014_06_22_authentication_class" />
+          <InputClaim ClaimReferenceId="extension_b2c7f6a4da2014_06_22_identifier" />
+          <InputClaim ClaimReferenceId="extension_b2c7f6a4da2014_06_22_given_name" />
+          <InputClaim ClaimReferenceId="extension_b2c7f6a4da2014_06_22_sur_name" />
+          <InputClaim ClaimReferenceId="extension_b2c7f6a4da2014_06_22_email" />
+          <InputClaim ClaimReferenceId="extension_b2c7f6a4da2014_06_22_newPassword" />
+          <InputClaim ClaimReferenceId="extension_b2c7f6a4da2014_06_22_reenterPassword" />
+          <InputClaim ClaimReferenceId="extension_b2c7f6a4da2014_06_22_phone" />
+          <InputClaim ClaimReferenceId="extension_b2c7f6a4da2014_06_22_newPasswordAgain" />
+        </ClaimType>
+      </ClaimsSchema>
+    </UserJourney>
+
+    <UserJourney>
+      <OrchestrationSteps>
+        <OrchestrationStep Type="DisplayClaim" Name="PasswordReset" />
+        <OrchestrationStep Type="EditClaim" Name="UserChangeEmail" />
+        <OrchestrationStep Type="SetClaim" Name="UserChangeEmail" />
+      </OrchestrationSteps>
+      <ClaimsSchema>
+        <ClaimType Id="extension_b2c7f6a4da2014_06_22_user_attributes">
+          <InputClaim ClaimReferenceId="extension_b2c7f6a4da2014_06_22_given_name" />
+          <InputClaim ClaimReferenceId="extension_b2c7f6a4da2014_06_22_sur_name" />
+          <InputClaim ClaimReferenceId="extension_b2c7f6a4da2014_06_22_email" />
+          <InputClaim ClaimReferenceId="extension_b2c7f6a4da2014_06_22_newPassword" />
+          <InputClaim ClaimReferenceId="extension_b2c7f6a4da2014_06_22_reenterPassword" />
+          <InputClaim ClaimReferenceId="extension_b2c7f6a4da2014_06_22_phone" />
+          <InputClaim ClaimReferenceId="extension_b2c7f6a4da2014_06_22_newPasswordAgain" />
+        </ClaimType>
+      </ClaimsSchema>
+    </UserJourney>
+
+    <RelyingParty>
+      <Default>
+        <JWT Issuers="https://sts.windows.net/{settings:TENANT_ID}/v2.0/" />
+        <JWKS Url="https://login.microsoftonline.com/common/discovery/v2.0/keys" />
+      </Default>
+    </RelyingParty>
+
+  </BasePolicy>
+
+</TrustFrameworkPolicy>
