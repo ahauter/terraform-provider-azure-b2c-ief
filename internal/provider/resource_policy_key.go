@@ -197,6 +197,7 @@ func (r *PolicyKeyResource) uploadOrGenerate(ctx context.Context, data PolicyKey
 		shouldUpload := configData.Upload.ValueVersion.IsNull() || // Null = always upload
 			configData.Upload.ValueVersion.ValueInt64() == -1 || // Explicit -1 = upload
 			(configData.Upload.ValueVersion.ValueInt64() >= 0 && // Non-negative check + version change
+				stateData.Upload != nil &&
 				configData.Upload.ValueVersion.ValueInt64() != stateData.Upload.ValueVersion.ValueInt64())
 
 		if shouldUpload {
@@ -251,7 +252,7 @@ func (r *PolicyKeyResource) Create(ctx context.Context, req resource.CreateReque
 	tflog.Debug(ctx, fmt.Sprintf("%s: CREATE begin", logPrefix))
 
 	var data PolicyKeyModel
-	diags := req.Plan.Get(ctx, &data)
+	diags := req.Config.Get(ctx, &data)
 	resp.Diagnostics.Append(diags...)
 
 	tflog.Debug(ctx, fmt.Sprintf("%s: Create plan: %s", logPrefix, jsonDebug(data)))
@@ -392,7 +393,7 @@ func (r *PolicyKeyResource) Update(ctx context.Context, req resource.UpdateReque
 
 	// Get both config and state data for version comparison
 	var configData, stateData PolicyKeyModel
-	configDiags := req.Plan.Get(ctx, &configData)
+	configDiags := req.Config.Get(ctx, &configData)
 	stateDiags := req.State.Get(ctx, &stateData)
 	resp.Diagnostics.Append(configDiags...)
 	resp.Diagnostics.Append(stateDiags...)
