@@ -94,22 +94,22 @@ func (r *PolicyKeyResource) Schema(
 	resp *resource.SchemaResponse,
 ) {
 	resp.Schema = schema.Schema{
-		Description: "Manages an Azure AD B2C IEF policy key container.",
+		MarkdownDescription: "Manages an Azure AD B2C IEF policy key container. Policy keys are used by the Identity Experience Framework for signing, encryption, and integration with external identity providers.",
 
 		Attributes: map[string]schema.Attribute{
 			"id": schema.StringAttribute{
-				Computed:    true,
-				Description: "The object ID of the key container in Microsoft Graph. Use this to reference the policy key in a policy.",
+				Computed:            true,
+				MarkdownDescription: "The object ID of the key container in Microsoft Graph. Use this to reference the policy key in a policy.",
 			},
 
 			"name": schema.StringAttribute{
-				Required:    true,
-				Description: "The IEF policy key container name. The B2C_1A_ prefix is not added! This will cause errors if the name is used in a policy",
+				Required:            true,
+				MarkdownDescription: "The IEF policy key container name. The `B2C_1A_` prefix is not added automatically by this provider! You must include it in your policy XML if you reference this key.",
 			},
 
 			"usage": schema.StringAttribute{
-				Required:    true,
-				Description: "Key usage: sig (signing) or enc (encryption).",
+				Required:            true,
+				MarkdownDescription: "Key usage: `sig` (signing) or `enc` (encryption).",
 				Validators: []validator.String{
 					stringvalidator.OneOf("sig", "enc"),
 				},
@@ -118,11 +118,11 @@ func (r *PolicyKeyResource) Schema(
 
 		Blocks: map[string]schema.Block{
 			"generate": schema.SingleNestedBlock{
-				Description: "Generate a new key in the key container.",
+				MarkdownDescription: "Generate a new key in the key container. This will trigger a new key generation on the Azure AD B2C side.",
 				Attributes: map[string]schema.Attribute{
 					"type": schema.StringAttribute{
-						Optional:    true,
-						Description: "Key type. Only RSA is currently supported by Azure AD B2C.",
+						Optional:            true,
+						MarkdownDescription: "Key type. Currently, only `RSA` is supported by Azure AD B2C for generated keys.",
 						Validators: []validator.String{
 							stringvalidator.OneOf("RSA"),
 						},
@@ -131,16 +131,16 @@ func (r *PolicyKeyResource) Schema(
 			},
 
 			"upload": schema.SingleNestedBlock{
-				Description: "Upload an existing key or secret.",
+				MarkdownDescription: "Upload an existing key or secret. This allows you to manage secrets (like Client Secrets for Social IDs) in Terraform and upload them securely.",
 				Attributes: map[string]schema.Attribute{
 					"value": schema.StringAttribute{
-						WriteOnly:   true,
-						Optional:    true,
-						Description: "Raw secret value (write-only, never stored in state)",
+						WriteOnly:           true,
+						Optional:            true,
+						MarkdownDescription: "Raw secret value. This attribute is write-only and is never stored in the Terraform state for security.",
 					},
 					"value_version": schema.Int64Attribute{
-						Optional:    true,
-						Description: "Version tracker. Omit to always upload, 0+ to manage versions, -1 to force upload.",
+						Optional:            true,
+						MarkdownDescription: "A version tracker for the secret value. Omit to always upload on every apply, set to a non-negative integer to manage versions, or set to `-1` to force an upload.",
 					},
 				},
 			},

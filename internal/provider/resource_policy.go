@@ -45,22 +45,30 @@ func (r *PolicyResource) Schema(
 	_ resource.SchemaRequest,
 	resp *resource.SchemaResponse,
 ) {
-	resp.Schema.Attributes = map[string]schema.Attribute{
-		"id": schema.StringAttribute{
-			Computed: true,
-		},
-		"file": schema.StringAttribute{
-			Required: true,
-		},
-		"app_settings": schema.MapAttribute{
-			Required:    true,
-			ElementType: types.StringType,
-		},
-		"publish": schema.BoolAttribute{
-			Required: true,
-		},
-		"xml": schema.StringAttribute{
-			Computed: true,
+	resp.Schema = schema.Schema{
+		MarkdownDescription: "Manages an Azure AD B2C Trust Framework Policy (Custom Policy). This resource allows you to upload XML policies to your B2C tenant with support for variable injection (app settings).",
+		Attributes: map[string]schema.Attribute{
+			"id": schema.StringAttribute{
+				Computed:            true,
+				MarkdownDescription: "The Policy ID (extracted from the XML `PolicyId` attribute).",
+			},
+			"file": schema.StringAttribute{
+				Required:            true,
+				MarkdownDescription: "Path to the XML policy file on the local file system.",
+			},
+			"app_settings": schema.MapAttribute{
+				Required:            true,
+				ElementType:         types.StringType,
+				MarkdownDescription: "A map of key-value pairs used for variable injection in the XML policy. Use `{settings:key}` in your XML to reference these values.",
+			},
+			"publish": schema.BoolAttribute{
+				Required:            true,
+				MarkdownDescription: "Whether to upload/publish the policy to the B2C tenant. If `false`, the provider only performs local processing (variable injection) and stores the result in the `xml` attribute.",
+			},
+			"xml": schema.StringAttribute{
+				Computed:            true,
+				MarkdownDescription: "The final processed XML content after variable injection.",
+			},
 		},
 	}
 }

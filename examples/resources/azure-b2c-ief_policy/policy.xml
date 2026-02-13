@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<TrustFrameworkPolicy
+  xmlns:xsi="https://www.w3.org/2001/XMLSchema-instance"
+  xmlns:xsd="https://www.w3.org/2001/XMLSchema"
+  xmlns="http://schemas.microsoft.com/online/cpim/schemas/2013/06"
+  PolicySchemaVersion="0.3.0.0"
+  TenantId="{settings:tenant_name}.onmicrosoft.com"
+  PolicyId="B2C_1A_signup_signin"
+  PublicPolicyUri="http://{settings:tenant_name}.onmicrosoft.com/B2C_1A_signup_signin">
+
+  <BasePolicy>
+    <TenantId>{settings:tenant_name}.onmicrosoft.com</TenantId>
+    <PolicyId>B2C_1A_TrustFrameworkExtensions</PolicyId>
+  </BasePolicy>
+
+  <RelyingParty>
+    <DefaultUserJourney ReferenceId="SignUpOrSignIn" />
+    <UserJourneyBehaviors>
+      <SingleSignOn Scope="Tenant" KeepAliveInDays="7"/>
+      <SessionExpiryType>Rolling</SessionExpiryType>
+      <SessionExpiryInSeconds>900</SessionExpiryInSeconds>
+      <JourneyInsights TelemetryEngine="ApplicationInsights" ConnectionString="{settings:ai_connection_string}" DeveloperMode="true" ClientEnabled="false" ServerEnabled="true" TelemetryVersion="1.0.0" />
+      <ContentDefinitionParameters>
+        <Parameter Name="campaignId">{OAUTH-KV:campaignId}</Parameter>
+      </ContentDefinitionParameters>
+    </UserJourneyBehaviors>
+    <TechnicalProfile Id="PolicyProfile">
+      <DisplayName>PolicyProfile</DisplayName>
+      <Description>The policy profile</Description>
+      <Protocol Name="OpenIdConnect" />
+      <Metadata>collection of key/value pairs of data</Metadata>
+      <OutputClaims>
+        <OutputClaim ClaimTypeReferenceId="displayName" />
+        <OutputClaim ClaimTypeReferenceId="givenName" />
+        <OutputClaim ClaimTypeReferenceId="surname" />
+        <OutputClaim ClaimTypeReferenceId="email" />
+        <OutputClaim ClaimTypeReferenceId="objectId" PartnerClaimType="sub"/>
+        <OutputClaim ClaimTypeReferenceId="identityProvider" />
+        <OutputClaim ClaimTypeReferenceId="loyaltyNumber" />
+      </OutputClaims>
+      <SubjectNamingInfo ClaimType="sub" />
+    </TechnicalProfile>
+  </RelyingParty>
+</TrustFrameworkPolicy>

@@ -1,4 +1,9 @@
-.PHONY: test test-unit test-acc test-fuzz clean build help install-deps
+.PHONY: test test-unit test-acc test-fuzz clean build help install-deps generate
+
+# Generate documentation
+generate:
+	@echo "Generating documentation..."
+	@go generate ./...
 
 # Default test target - run all tests
 test:

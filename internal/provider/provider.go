@@ -28,15 +28,22 @@ func (p *b2ciefProvider) Metadata(_ context.Context, _ provider.MetadataRequest,
 }
 
 func (p *b2ciefProvider) Schema(ctx context.Context, req provider.SchemaRequest, resp *provider.SchemaResponse) {
-	resp.Schema.Attributes = map[string]schema.Attribute{
-		"tenant_id": schema.StringAttribute{
-			Required: true,
-		},
-		"client_id": schema.StringAttribute{
-			Required: true,
-		},
-		"client_secret": schema.StringAttribute{
-			Required: true,
+	resp.Schema = schema.Schema{
+		MarkdownDescription: "The Azure AD B2C IEF (Identity Experience Framework) provider allows managing custom policies and policy keys in Azure AD B2C via the Microsoft Graph API.",
+		Attributes: map[string]schema.Attribute{
+			"tenant_id": schema.StringAttribute{
+				Required:            true,
+				MarkdownDescription: "The Azure AD B2C tenant ID (e.g. `yourtenant.onmicrosoft.com` or a UUID).",
+			},
+			"client_id": schema.StringAttribute{
+				Required:            true,
+				MarkdownDescription: "The Application (client) ID of the Service Principal with `TrustFramework.ReadWrite.All` and `Policy.ReadWrite.TrustFramework` permissions.",
+			},
+			"client_secret": schema.StringAttribute{
+				Required:            true,
+				Sensitive:           true,
+				MarkdownDescription: "The Client Secret for the Service Principal.",
+			},
 		},
 	}
 }
