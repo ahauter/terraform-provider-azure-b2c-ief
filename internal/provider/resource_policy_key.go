@@ -194,7 +194,7 @@ func (r *PolicyKeyResource) uploadOrGenerate(ctx context.Context, data PolicyKey
 		}
 
 		// Check if we should upload based on version
-		shouldUpload := configData.Upload.Value.IsNull() || // Null = always upload
+		shouldUpload := configData.Upload.ValueVersion.IsNull() || // Null = always upload
 			configData.Upload.ValueVersion.ValueInt64() == -1 || // Explicit -1 = upload
 			(configData.Upload.ValueVersion.ValueInt64() >= 0 && // Non-negative check + version change
 				configData.Upload.ValueVersion.ValueInt64() != stateData.Upload.ValueVersion.ValueInt64())

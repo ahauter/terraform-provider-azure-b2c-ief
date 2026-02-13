@@ -1,4 +1,4 @@
-module github.com/yourname/terraform-provider-b2cief
+module github.com/ahauter/terraform-provider-azure-b2c-ief
 
 go 1.24.0
 

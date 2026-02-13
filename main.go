@@ -3,8 +3,8 @@ package main
 import (
 	"context"
 
+	"github.com/ahauter/terraform-provider-azure-b2c-ief/internal/provider"
 	"github.com/hashicorp/terraform-plugin-framework/providerserver"
-	"github.com/yourname/terraform-provider-b2cief/internal/provider"
 )
 
 func main() {
